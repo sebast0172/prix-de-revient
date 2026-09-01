@@ -747,12 +747,37 @@ async function syncFetchRemote(){
   catch(e){if(String(e.message).toLowerCase().includes('jwt')&&await syncRefreshSession())return syncFetchRemote();throw e}
 }
 async function syncUploadSnapshot(){
-  if(!syncUserId()||syncPushBusy)return;syncPushBusy=true;
+  if(!syncUserId()||syncPushBusy)return;
+  syncPushBusy=true;
   try{
-    const payload=[{id:syncUserId(),data:syncSnapshot(),updated_at:new Date().toISOString()}];
-    const rows=await syncApi('/rest/v1/app_data?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify(payload)});
-    const row=Array.isArray(rows)&&rows[0]?rows[0]:null;syncLastLocalJson=syncSnapshotJson();if(row&&row.updated_at)localStorage.setItem(syncRemoteKey(),row.updated_at);syncStatus('Synchronisé avec le cloud.','ok')
-  }catch(e){syncStatus('Synchronisation impossible : '+e.message,'err')}finally{syncPushBusy=false}
+    const stamp=new Date().toISOString();
+    const snapshot=syncSnapshot();
+    const existing=await syncFetchRemote();
+
+    let rows;
+    if(existing){
+      rows=await syncApi('/rest/v1/app_data?id=eq.'+encodeURIComponent(syncUserId()),{
+        method:'PATCH',
+        headers:{Prefer:'return=representation'},
+        body:JSON.stringify({data:snapshot,updated_at:stamp})
+      });
+    }else{
+      rows=await syncApi('/rest/v1/app_data',{
+        method:'POST',
+        headers:{Prefer:'return=representation'},
+        body:JSON.stringify([{id:syncUserId(),data:snapshot,updated_at:stamp}])
+      });
+    }
+
+    const row=Array.isArray(rows)&&rows[0]?rows[0]:null;
+    syncLastLocalJson=JSON.stringify(snapshot);
+    localStorage.setItem(syncRemoteKey(),(row&&row.updated_at)||stamp);
+    syncStatus('Synchronisé avec le cloud.','ok');
+  }catch(e){
+    syncStatus('Synchronisation impossible : '+e.message,'err');
+  }finally{
+    syncPushBusy=false;
+  }
 }
 function syncApplyRemoteData(data,updatedAt){
   syncApplyingRemote=true;
@@ -777,7 +802,35 @@ async function syncPullIfNew(force=false){
 }
 async function syncInitializeUpload(){localStorage.setItem(syncInitKey(),'1');document.getElementById('syncFirstChoice').style.display='none';syncLastLocalJson=syncSnapshotJson();await syncUploadSnapshot();syncStartLoops();}
 async function syncInitializeDownload(){const row=await syncFetchRemote();if(!row){syncStatus('Aucune donnée dans le cloud. Utilise « Envoyer les données de cet appareil vers le cloud ».','warn');return}localStorage.setItem(syncInitKey(),'1');document.getElementById('syncFirstChoice').style.display='none';syncApplyRemoteData(row.data||{},row.updated_at||'');}
-async function syncNow(){if(!syncUserId())return;const row=await syncFetchRemote();if(!row){await syncUploadSnapshot();return}const remembered=localStorage.getItem(syncRemoteKey())||'';if(row.updated_at&&row.updated_at!==remembered){syncApplyRemoteData(row.data||{},row.updated_at);return}await syncUploadSnapshot();}
+async function syncNow(){
+  if(!syncUserId())return;
+
+  const localJson=syncSnapshotJson();
+
+  // Si cet appareil a changé depuis la dernière synchro, on envoie d'abord
+  // ses données au cloud pour ne pas écraser une modification locale récente.
+  if(localJson!==syncLastLocalJson){
+    await syncUploadSnapshot();
+    return;
+  }
+
+  const row=await syncFetchRemote();
+  if(!row){
+    await syncUploadSnapshot();
+    return;
+  }
+
+  const remembered=localStorage.getItem(syncRemoteKey())||'';
+  const remoteJson=JSON.stringify(row.data||{});
+
+  if(row.updated_at&&row.updated_at!==remembered&&remoteJson!==localJson){
+    syncApplyRemoteData(row.data||{},row.updated_at);
+    return;
+  }
+
+  if(row.updated_at)localStorage.setItem(syncRemoteKey(),row.updated_at);
+  syncStatus('Déjà synchronisé avec le cloud.','ok');
+}
 function syncStartLoops(){syncStopLoops();syncLastLocalJson=syncSnapshotJson();syncTimerLocal=setInterval(async()=>{if(syncApplyingRemote||!syncUserId())return;const now=syncSnapshotJson();if(now!==syncLastLocalJson){syncLastLocalJson=now;await syncUploadSnapshot()}},2500);syncTimerRemote=setInterval(()=>syncPullIfNew(false),12000);}
 function syncStopLoops(){if(syncTimerLocal)clearInterval(syncTimerLocal);if(syncTimerRemote)clearInterval(syncTimerRemote);syncTimerLocal=syncTimerRemote=null;}
 async function syncAfterLogin(){if(!syncUserId())return;const initialized=localStorage.getItem(syncInitKey())==='1',choice=document.getElementById('syncFirstChoice');if(!initialized){choice.style.display='block';const row=await syncFetchRemote();syncStatus(row?'Données cloud trouvées. Choisis la source à conserver sur cet appareil.':'Cloud vide. Sur le PC principal, choisis « Envoyer les données de cet appareil vers le cloud ».','warn');return}choice.style.display='none';syncLastLocalJson=syncSnapshotJson();syncStatus('Synchronisation connectée.','ok');await syncPullIfNew(false);syncStartLoops();}
