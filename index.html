@@ -130,7 +130,7 @@ input,select,textarea{max-width:100%}
 <div class="grid">
 
 <section class="card" id="syncPanel">
-  <h2 style="margin-top:0">Synchronisation PC ↔ iPhone</h2>
+  <h2 style="margin-top:0">Synchronisation PC ↔ iPhone <small style="font-weight:400;color:#64748b">(correctif 3)</small></h2>
   <div id="syncLoggedOut">
     <div class="sync-grid">
       <div><label for="syncEmail"><b>E-mail</b></label><input id="syncEmail" type="email" autocomplete="email" placeholder="votre@email.fr"></div>
@@ -152,6 +152,8 @@ input,select,textarea{max-width:100%}
       </div>
     </div>
     <div class="sync-actions">
+      <button type="button" onclick="syncForceUpload()">Envoyer cet appareil vers le cloud</button>
+      <button type="button" class="secondary" onclick="syncForceDownload()">Charger depuis le cloud</button>
       <button type="button" class="secondary" onclick="syncNow()">Synchroniser maintenant</button>
       <button type="button" class="secondary" onclick="syncSignOut()">Déconnexion</button>
     </div>
@@ -639,7 +641,12 @@ document.addEventListener('DOMContentLoaded',renderSavedV4);
   if(help && isIOS && !standalone) help.style.display='block';
 
   if('serviceWorker' in navigator && location.protocol.startsWith('http')){
-    window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+    window.addEventListener('load',async()=>{
+      try{
+        const regs=await navigator.serviceWorker.getRegistrations();
+        for(const reg of regs) await reg.unregister();
+      }catch(e){}
+    });
   }
 })();
 
@@ -747,13 +754,12 @@ async function syncFetchRemote(){
   catch(e){if(String(e.message).toLowerCase().includes('jwt')&&await syncRefreshSession())return syncFetchRemote();throw e}
 }
 async function syncUploadSnapshot(){
-  if(!syncUserId()||syncPushBusy)return;
+  if(!syncUserId()||syncPushBusy)return false;
   syncPushBusy=true;
   try{
     const stamp=new Date().toISOString();
     const snapshot=syncSnapshot();
     const existing=await syncFetchRemote();
-
     let rows;
     if(existing){
       rows=await syncApi('/rest/v1/app_data?id=eq.'+encodeURIComponent(syncUserId()),{
@@ -768,13 +774,14 @@ async function syncUploadSnapshot(){
         body:JSON.stringify([{id:syncUserId(),data:snapshot,updated_at:stamp}])
       });
     }
-
     const row=Array.isArray(rows)&&rows[0]?rows[0]:null;
     syncLastLocalJson=JSON.stringify(snapshot);
     localStorage.setItem(syncRemoteKey(),(row&&row.updated_at)||stamp);
-    syncStatus('Synchronisé avec le cloud.','ok');
+    syncStatus('Données envoyées au cloud.','ok');
+    return true;
   }catch(e){
-    syncStatus('Synchronisation impossible : '+e.message,'err');
+    syncStatus('Envoi impossible : '+e.message,'err');
+    return false;
   }finally{
     syncPushBusy=false;
   }
@@ -802,36 +809,72 @@ async function syncPullIfNew(force=false){
 }
 async function syncInitializeUpload(){localStorage.setItem(syncInitKey(),'1');document.getElementById('syncFirstChoice').style.display='none';syncLastLocalJson=syncSnapshotJson();await syncUploadSnapshot();syncStartLoops();}
 async function syncInitializeDownload(){const row=await syncFetchRemote();if(!row){syncStatus('Aucune donnée dans le cloud. Utilise « Envoyer les données de cet appareil vers le cloud ».','warn');return}localStorage.setItem(syncInitKey(),'1');document.getElementById('syncFirstChoice').style.display='none';syncApplyRemoteData(row.data||{},row.updated_at||'');}
+async function syncForceUpload(){
+  if(!syncUserId())return;
+  syncStatus('Envoi vers le cloud…');
+  await syncUploadSnapshot();
+}
+
+async function syncForceDownload(){
+  if(!syncUserId())return;
+  syncStatus('Chargement depuis le cloud…');
+  try{
+    const row=await syncFetchRemote();
+    if(!row){
+      syncStatus('Aucune donnée trouvée dans le cloud.','warn');
+      return;
+    }
+    syncApplyRemoteData(row.data||{},row.updated_at||'');
+  }catch(e){
+    syncStatus('Chargement impossible : '+e.message,'err');
+  }
+}
+
 async function syncNow(){
   if(!syncUserId())return;
-
   const localJson=syncSnapshotJson();
 
-  // Si cet appareil a changé depuis la dernière synchro, on envoie d'abord
-  // ses données au cloud pour ne pas écraser une modification locale récente.
   if(localJson!==syncLastLocalJson){
     await syncUploadSnapshot();
     return;
   }
 
-  const row=await syncFetchRemote();
-  if(!row){
-    await syncUploadSnapshot();
-    return;
+  try{
+    const row=await syncFetchRemote();
+    if(!row){
+      await syncUploadSnapshot();
+      return;
+    }
+    const remembered=localStorage.getItem(syncRemoteKey())||'';
+    const remoteAt=row.updated_at||'';
+    const remoteJson=JSON.stringify(row.data||{});
+
+    if(remoteAt && remoteAt!==remembered && remoteJson!==localJson){
+      syncApplyRemoteData(row.data||{},remoteAt);
+      return;
+    }
+
+    if(remoteAt)localStorage.setItem(syncRemoteKey(),remoteAt);
+    syncStatus('Déjà synchronisé avec le cloud.','ok');
+  }catch(e){
+    syncStatus('Synchronisation impossible : '+e.message,'err');
   }
-
-  const remembered=localStorage.getItem(syncRemoteKey())||'';
-  const remoteJson=JSON.stringify(row.data||{});
-
-  if(row.updated_at&&row.updated_at!==remembered&&remoteJson!==localJson){
-    syncApplyRemoteData(row.data||{},row.updated_at);
-    return;
-  }
-
-  if(row.updated_at)localStorage.setItem(syncRemoteKey(),row.updated_at);
-  syncStatus('Déjà synchronisé avec le cloud.','ok');
 }
-function syncStartLoops(){syncStopLoops();syncLastLocalJson=syncSnapshotJson();syncTimerLocal=setInterval(async()=>{if(syncApplyingRemote||!syncUserId())return;const now=syncSnapshotJson();if(now!==syncLastLocalJson){syncLastLocalJson=now;await syncUploadSnapshot()}},2500);syncTimerRemote=setInterval(()=>syncPullIfNew(false),12000);}
+
+function syncStartLoops(){
+  syncStopLoops();
+  syncLastLocalJson=syncSnapshotJson();
+
+  syncTimerLocal=setInterval(async()=>{
+    if(syncApplyingRemote||!syncUserId()||syncPushBusy)return;
+    const now=syncSnapshotJson();
+    if(now!==syncLastLocalJson){
+      await syncUploadSnapshot();
+    }
+  },2500);
+
+  syncTimerRemote=setInterval(()=>syncPullIfNew(false),8000);
+}
 function syncStopLoops(){if(syncTimerLocal)clearInterval(syncTimerLocal);if(syncTimerRemote)clearInterval(syncTimerRemote);syncTimerLocal=syncTimerRemote=null;}
 async function syncAfterLogin(){if(!syncUserId())return;const initialized=localStorage.getItem(syncInitKey())==='1',choice=document.getElementById('syncFirstChoice');if(!initialized){choice.style.display='block';const row=await syncFetchRemote();syncStatus(row?'Données cloud trouvées. Choisis la source à conserver sur cet appareil.':'Cloud vide. Sur le PC principal, choisis « Envoyer les données de cet appareil vers le cloud ».','warn');return}choice.style.display='none';syncLastLocalJson=syncSnapshotJson();syncStatus('Synchronisation connectée.','ok');await syncPullIfNew(false);syncStartLoops();}
 document.addEventListener('DOMContentLoaded',async()=>{syncLoadSession();syncRenderAuth();if(syncSession&&syncUserId())await syncAfterLogin();});
