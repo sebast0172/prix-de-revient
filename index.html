@@ -87,6 +87,19 @@ input,select,textarea{max-width:100%}
 @media(display-mode:standalone){#iosInstallHelp{display:none!important}}
 </style>
 
+
+<style>
+#syncPanel{margin-top:12px}
+#syncPanel .sync-grid{display:grid;grid-template-columns:minmax(180px,1fr) minmax(180px,1fr);gap:10px}
+#syncPanel .sync-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+#syncPanel .sync-status{margin-top:8px;padding:9px 11px;border-radius:9px;background:#f4f6f8;color:#334155;font-size:14px}
+#syncPanel .sync-status.ok{background:#ecfdf5;color:#166534}
+#syncPanel .sync-status.warn{background:#fff7ed;color:#9a3412}
+#syncPanel .sync-status.err{background:#fef2f2;color:#991b1b}
+#syncFirstChoice{display:none;margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+@media(max-width:680px){#syncPanel .sync-grid{grid-template-columns:1fr}#syncPanel .sync-actions button{flex:1 1 100%}}
+</style>
+
 </head>
 <body>
 <header><h1>Calculateur de prix de revient – Recettes</h1><p>Version 4 • recherche rapide des ingrédients • produits modifiables • sous-recettes</p></header>
@@ -115,6 +128,37 @@ input,select,textarea{max-width:100%}
 
 <section id="recipes">
 <div class="grid">
+
+<section class="card" id="syncPanel">
+  <h2 style="margin-top:0">Synchronisation PC ↔ iPhone</h2>
+  <div id="syncLoggedOut">
+    <div class="sync-grid">
+      <div><label for="syncEmail"><b>E-mail</b></label><input id="syncEmail" type="email" autocomplete="email" placeholder="votre@email.fr"></div>
+      <div><label for="syncPassword"><b>Mot de passe de synchronisation</b></label><input id="syncPassword" type="password" autocomplete="current-password" placeholder="8 caractères minimum"></div>
+    </div>
+    <div class="sync-actions">
+      <button type="button" class="secondary" onclick="syncSignUp()">Créer mon compte sync</button>
+      <button type="button" onclick="syncSignIn()">Se connecter</button>
+    </div>
+  </div>
+  <div id="syncLoggedIn" style="display:none">
+    <div><b>Compte :</b> <span id="syncUserEmail"></span></div>
+    <div id="syncFirstChoice">
+      <b>Premier démarrage sur cet appareil</b>
+      <p style="margin:6px 0 10px">Choisis la source à conserver pour éviter d’écraser des données par erreur.</p>
+      <div class="sync-actions">
+        <button type="button" onclick="syncInitializeUpload()">Envoyer les données de cet appareil vers le cloud</button>
+        <button type="button" class="secondary" onclick="syncInitializeDownload()">Charger les données du cloud sur cet appareil</button>
+      </div>
+    </div>
+    <div class="sync-actions">
+      <button type="button" class="secondary" onclick="syncNow()">Synchroniser maintenant</button>
+      <button type="button" class="secondary" onclick="syncSignOut()">Déconnexion</button>
+    </div>
+  </div>
+  <div id="syncStatus" class="sync-status">Synchronisation non connectée.</div>
+</section>
+
 <section class="card">
 <h2>Créer une recette</h2>
 <div class="row3">
@@ -644,6 +688,100 @@ function importBackupIphoneFile(ev){
   reader.readAsText(file);
   ev.target.value='';
 }
+</script>
+
+
+<script>
+const SYNC_URL="https://sjewijaqpwfzwbirrgeq.supabase.co";
+const SYNC_KEY="sb_publishable_s8dAObLFzvBVMsFPo-xNIw_qa7WU3j2";
+const SYNC_SESSION_KEY='prixRevientSupabaseSessionV1';
+const SYNC_INIT_PREFIX='prixRevientSyncInitV1:';
+const SYNC_REMOTE_PREFIX='prixRevientSyncRemoteV1:';
+let syncSession=null,syncTimerLocal=null,syncTimerRemote=null,syncLastLocalJson='',syncPushBusy=false,syncPullBusy=false,syncApplyingRemote=false;
+
+function syncStatus(msg,type=''){const el=document.getElementById('syncStatus');if(!el)return;el.textContent=msg;el.className='sync-status'+(type?' '+type:'');}
+function syncSnapshot(){let products=[],recipes=[],types={};try{products=JSON.parse(localStorage.getItem('productsV3')||'[]')}catch(e){}try{recipes=JSON.parse(localStorage.getItem('recipesV3')||'[]')}catch(e){}try{types=JSON.parse(localStorage.getItem('recipeTypesV4')||'{}')}catch(e){}return {products,recipes,recipeTypes:types};}
+function syncSnapshotJson(){return JSON.stringify(syncSnapshot());}
+function syncSaveSession(s){syncSession=s||null;if(s)localStorage.setItem(SYNC_SESSION_KEY,JSON.stringify(s));else localStorage.removeItem(SYNC_SESSION_KEY);}
+function syncLoadSession(){try{syncSession=JSON.parse(localStorage.getItem(SYNC_SESSION_KEY)||'null')}catch(e){syncSession=null}return syncSession;}
+function syncUserId(){return syncSession&&syncSession.user&&syncSession.user.id?syncSession.user.id:null;}
+function syncInitKey(){return SYNC_INIT_PREFIX+(syncUserId()||'');}
+function syncRemoteKey(){return SYNC_REMOTE_PREFIX+(syncUserId()||'');}
+
+async function syncAuthRequest(path,body){
+  const res=await fetch(SYNC_URL+path,{method:'POST',headers:{'apikey':SYNC_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const text=await res.text();let data=null;try{data=text?JSON.parse(text):null}catch(e){data=text}
+  if(!res.ok){throw new Error((data&&data.msg)||(data&&data.message)||(data&&data.error_description)||'Connexion impossible')}
+  return data;
+}
+async function syncApi(path,opts={}){
+  const headers=Object.assign({'apikey':SYNC_KEY,'Content-Type':'application/json'},opts.headers||{});
+  if(syncSession&&syncSession.access_token)headers.Authorization='Bearer '+syncSession.access_token;
+  const res=await fetch(SYNC_URL+path,Object.assign({},opts,{headers}));
+  const text=await res.text();let body=null;try{body=text?JSON.parse(text):null}catch(e){body=text}
+  if(!res.ok){throw new Error((body&&body.msg)||(body&&body.message)||(body&&body.error_description)||(typeof body==='string'?body:'Erreur réseau'))}
+  return body;
+}
+async function syncRefreshSession(){
+  if(!syncSession||!syncSession.refresh_token)return false;
+  try{const s=await syncAuthRequest('/auth/v1/token?grant_type=refresh_token',{refresh_token:syncSession.refresh_token});if(s&&s.access_token){syncSaveSession(s);return true}}catch(e){}
+  return false;
+}
+async function syncSignUp(){
+  const email=(document.getElementById('syncEmail').value||'').trim(),password=document.getElementById('syncPassword').value||'';
+  if(!email||password.length<8){syncStatus('Entre ton e-mail et un mot de passe d’au moins 8 caractères.','warn');return}
+  syncStatus('Création du compte…');
+  try{const data=await syncAuthRequest('/auth/v1/signup',{email,password});if(data&&data.access_token){syncSaveSession(data);syncRenderAuth();await syncAfterLogin()}else{syncStatus('Compte créé. Vérifie ton e-mail Supabase, puis reviens ici et clique sur « Se connecter ».','ok')}}catch(e){syncStatus('Création impossible : '+e.message,'err')}
+}
+async function syncSignIn(){
+  const email=(document.getElementById('syncEmail').value||'').trim(),password=document.getElementById('syncPassword').value||'';
+  if(!email||!password){syncStatus('Entre ton e-mail et ton mot de passe.','warn');return}
+  syncStatus('Connexion…');
+  try{const data=await syncAuthRequest('/auth/v1/token?grant_type=password',{email,password});syncSaveSession(data);syncRenderAuth();await syncAfterLogin()}catch(e){syncStatus('Connexion impossible : '+e.message,'err')}
+}
+function syncSignOut(){syncStopLoops();syncSaveSession(null);syncRenderAuth();syncStatus('Déconnecté de la synchronisation.');}
+function syncRenderAuth(){const out=document.getElementById('syncLoggedOut'),inn=document.getElementById('syncLoggedIn');if(syncSession&&syncUserId()){out.style.display='none';inn.style.display='block';document.getElementById('syncUserEmail').textContent=(syncSession.user&&syncSession.user.email)||'Compte connecté'}else{out.style.display='block';inn.style.display='none'}}
+async function syncFetchRemote(){
+  if(!syncUserId())return null;
+  try{const rows=await syncApi('/rest/v1/app_data?id=eq.'+encodeURIComponent(syncUserId())+'&select=data,updated_at',{method:'GET'});return Array.isArray(rows)&&rows.length?rows[0]:null}
+  catch(e){if(String(e.message).toLowerCase().includes('jwt')&&await syncRefreshSession())return syncFetchRemote();throw e}
+}
+async function syncUploadSnapshot(){
+  if(!syncUserId()||syncPushBusy)return;syncPushBusy=true;
+  try{
+    const payload=[{id:syncUserId(),data:syncSnapshot(),updated_at:new Date().toISOString()}];
+    const rows=await syncApi('/rest/v1/app_data?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify(payload)});
+    const row=Array.isArray(rows)&&rows[0]?rows[0]:null;syncLastLocalJson=syncSnapshotJson();if(row&&row.updated_at)localStorage.setItem(syncRemoteKey(),row.updated_at);syncStatus('Synchronisé avec le cloud.','ok')
+  }catch(e){syncStatus('Synchronisation impossible : '+e.message,'err')}finally{syncPushBusy=false}
+}
+function syncApplyRemoteData(data,updatedAt){
+  syncApplyingRemote=true;
+  localStorage.setItem('productsV3',JSON.stringify(Array.isArray(data.products)?data.products:[]));
+  localStorage.setItem('recipesV3',JSON.stringify(Array.isArray(data.recipes)?data.recipes:[]));
+  localStorage.setItem('recipeTypesV4',JSON.stringify(data.recipeTypes&&typeof data.recipeTypes==='object'?data.recipeTypes:{}));
+  if(updatedAt)localStorage.setItem(syncRemoteKey(),updatedAt);
+  syncLastLocalJson=syncSnapshotJson();syncStatus('Nouvelles données reçues. Actualisation…','ok');setTimeout(()=>location.reload(),350);
+}
+async function syncPullIfNew(force=false){
+  if(!syncUserId()||syncPullBusy)return;syncPullBusy=true;
+  try{
+    const row=await syncFetchRemote();if(!row)return null;
+    const remembered=localStorage.getItem(syncRemoteKey())||'',remoteAt=row.updated_at||'',remoteJson=JSON.stringify(row.data||{}),localJson=syncSnapshotJson();
+    if(force||(remoteAt&&remoteAt!==remembered&&remoteJson!==localJson)){
+      const active=document.activeElement,editing=active&&/^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName);
+      if(editing&&!force){syncStatus('Des données plus récentes sont disponibles. Elles seront chargées dès que tu as fini ta saisie.','warn');return row}
+      syncApplyRemoteData(row.data||{},remoteAt);return row
+    }
+    if(remoteAt)localStorage.setItem(syncRemoteKey(),remoteAt);return row
+  }catch(e){syncStatus('Lecture du cloud impossible : '+e.message,'err')}finally{syncPullBusy=false}
+}
+async function syncInitializeUpload(){localStorage.setItem(syncInitKey(),'1');document.getElementById('syncFirstChoice').style.display='none';syncLastLocalJson=syncSnapshotJson();await syncUploadSnapshot();syncStartLoops();}
+async function syncInitializeDownload(){const row=await syncFetchRemote();if(!row){syncStatus('Aucune donnée dans le cloud. Utilise « Envoyer les données de cet appareil vers le cloud ».','warn');return}localStorage.setItem(syncInitKey(),'1');document.getElementById('syncFirstChoice').style.display='none';syncApplyRemoteData(row.data||{},row.updated_at||'');}
+async function syncNow(){if(!syncUserId())return;const row=await syncFetchRemote();if(!row){await syncUploadSnapshot();return}const remembered=localStorage.getItem(syncRemoteKey())||'';if(row.updated_at&&row.updated_at!==remembered){syncApplyRemoteData(row.data||{},row.updated_at);return}await syncUploadSnapshot();}
+function syncStartLoops(){syncStopLoops();syncLastLocalJson=syncSnapshotJson();syncTimerLocal=setInterval(async()=>{if(syncApplyingRemote||!syncUserId())return;const now=syncSnapshotJson();if(now!==syncLastLocalJson){syncLastLocalJson=now;await syncUploadSnapshot()}},2500);syncTimerRemote=setInterval(()=>syncPullIfNew(false),12000);}
+function syncStopLoops(){if(syncTimerLocal)clearInterval(syncTimerLocal);if(syncTimerRemote)clearInterval(syncTimerRemote);syncTimerLocal=syncTimerRemote=null;}
+async function syncAfterLogin(){if(!syncUserId())return;const initialized=localStorage.getItem(syncInitKey())==='1',choice=document.getElementById('syncFirstChoice');if(!initialized){choice.style.display='block';const row=await syncFetchRemote();syncStatus(row?'Données cloud trouvées. Choisis la source à conserver sur cet appareil.':'Cloud vide. Sur le PC principal, choisis « Envoyer les données de cet appareil vers le cloud ».','warn');return}choice.style.display='none';syncLastLocalJson=syncSnapshotJson();syncStatus('Synchronisation connectée.','ok');await syncPullIfNew(false);syncStartLoops();}
+document.addEventListener('DOMContentLoaded',async()=>{syncLoadSession();syncRenderAuth();if(syncSession&&syncUserId())await syncAfterLogin();});
 </script>
 
 </body>
