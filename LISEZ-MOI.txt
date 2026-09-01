@@ -1,0 +1,22 @@
+PRIX DE REVIENT – VERSION iPHONE / SAFARI
+
+Cette version est préparée comme application web installable (PWA).
+
+Pour l'utiliser comme vraie application sur iPhone :
+1. Les fichiers doivent être publiés sur une adresse HTTPS.
+2. Ouvrir cette adresse dans Safari.
+3. Toucher Partager.
+4. Choisir « Sur l’écran d’accueil ».
+5. Ouvrir ensuite l’icône depuis l’écran d’accueil.
+
+La version contient :
+- l’interface actuelle,
+- les produits et recettes récupérés,
+- les catégories Préparations / Recettes,
+- Visualiser,
+- sauvegarde JSON,
+- import de sauvegarde,
+- adaptation écran iPhone,
+- fonctionnement hors connexion après installation.
+
+Important : un simple fichier local ouvert avec file:// ne permet pas à Safari d’installer correctement le service worker.

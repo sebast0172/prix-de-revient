@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prix de revient – Recettes V4</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#1f2937;--muted:#667085;--line:#d9dee5;--accent:#2563eb;--danger:#dc2626;--green:#15803d}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:#17324d;color:#fff;padding:22px 28px}header h1{margin:0 0 6px;font-size:25px}header p{margin:0;opacity:.85}
+main{max-width:1450px;margin:22px auto;padding:0 18px}.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:0 2px 8px #0000000a}
+h2{font-size:18px;margin:0 0 14px}h3{font-size:15px;margin:17px 0 8px}label{font-size:13px;font-weight:700;display:block;margin-bottom:5px}
+input,select,button{font:inherit}input,select{width:100%;padding:9px 10px;border:1px solid #cbd2da;border-radius:7px;background:#fff}
+.row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{border:0;border-radius:7px;padding:9px 12px;cursor:pointer;font-weight:700}
+.primary{background:var(--accent);color:#fff}.secondary{background:#e8eef5;color:#17324d}.danger{background:#fee2e2;color:#991b1b}.green{background:#dcfce7;color:#166534}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 7px;border-bottom:1px solid var(--line);text-align:left}th{background:#f7f8fa}.num{text-align:right;white-space:nowrap}
+.scroll{max-height:430px;overflow:auto;border:1px solid var(--line);border-radius:8px}.empty{text-align:center;color:var(--muted);padding:24px}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}.metric{background:#f7f9fb;border:1px solid var(--line);padding:12px;border-radius:8px}
+.metric small{display:block;color:var(--muted);margin-bottom:5px}.big{font-size:21px;font-weight:800;color:#17324d}.note{font-size:12px;color:var(--muted);line-height:1.45}
+.badge{display:inline-block;padding:3px 7px;border-radius:99px;background:#e5eefb;color:#174a91;font-size:11px}
+.tabs{display:flex;gap:8px;margin-bottom:15px}.tab{background:#eef2f7}.tab.active{background:#17324d;color:#fff}.hidden{display:none}
+.error{color:#b91c1c;font-size:12px;margin-top:8px}.searchbox{position:relative}.suggestions{position:absolute;z-index:20;left:0;right:0;top:100%;background:#fff;border:1px solid #bfc7d1;border-radius:0 0 8px 8px;box-shadow:0 5px 14px #0002;max-height:260px;overflow:auto}
+.suggestion{padding:10px 12px;cursor:pointer;border-bottom:1px solid #eee}.suggestion:hover,.suggestion.active{background:#eef4ff}.suggestion small{display:block;color:var(--muted);margin-top:2px}
+.formbox{background:#f8fafc;border:1px solid var(--line);padding:14px;border-radius:9px}.pill{font-size:11px;background:#eef2f7;padding:3px 7px;border-radius:20px}
+@media(max-width:950px){.grid{grid-template-columns:1fr}.summary{grid-template-columns:repeat(2,1fr)}.row,.row3{grid-template-columns:1fr}}
+</style>
+
+<style>
+.v4list table{width:100%;border-collapse:collapse}
+.v4list select{padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.v4list .actions{display:flex;gap:7px;flex-wrap:wrap}
+.v4empty{text-align:center;color:var(--muted);padding:34px 0}
+</style>
+
+
+<style>
+#v4ViewOverlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:flex-start;justify-content:center;padding:30px 16px;z-index:9999;overflow:auto}
+#v4ViewOverlay.open{display:flex}
+#v4ViewCard{background:#fff;width:min(980px,100%);border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+#v4ViewHead{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px}
+#v4ViewHead h2{margin:0}
+#v4ViewClose{border:0;background:#e5e7eb;border-radius:8px;padding:9px 12px;cursor:pointer;font-weight:700}
+#v4ViewCard table{width:100%;border-collapse:collapse}
+#v4ViewCard th,#v4ViewCard td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
+#v4ViewTotals{margin-top:16px;font-weight:700}
+</style>
+
+
+<meta name="theme-color" content="#17324d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Prix de revient">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+/* Optimisation iPhone / Safari */
+html{-webkit-text-size-adjust:100%}
+body{padding-bottom:env(safe-area-inset-bottom)}
+header{padding-top:calc(18px + env(safe-area-inset-top))}
+button,input,select,textarea{font-size:16px}
+button,.tab{min-height:44px}
+.tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;padding-bottom:4px}
+.tabs .tab{white-space:nowrap;flex:0 0 auto}
+.card{overflow:hidden}
+table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+input,select,textarea{max-width:100%}
+#v4ViewOverlay{padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+#v4ViewCard{border-radius:12px}
+@media(max-width:680px){
+  main{margin:12px auto;padding:0 10px}
+  header{padding-left:16px;padding-right:16px}
+  header h1{font-size:21px}
+  .grid,.row2,.row3{grid-template-columns:1fr!important}
+  .card{padding:14px}
+  .actions{gap:8px}
+  .actions button{flex:1 1 auto}
+  .v4list table{display:block;overflow-x:auto}
+  .v4list th,.v4list td{min-width:120px}
+  .v4list th:first-child,.v4list td:first-child{min-width:190px}
+}
+#iosInstallHelp{
+  display:none;background:#eef6ff;border:1px solid #bfdbfe;border-radius:10px;
+  padding:10px 12px;margin:0 0 12px;font-size:14px;line-height:1.4
+}
+@media(display-mode:standalone){#iosInstallHelp{display:none!important}}
+</style>
+
+</head>
+<body>
+<header><h1>Calculateur de prix de revient – Recettes</h1><p>Version 4 • recherche rapide des ingrédients • produits modifiables • sous-recettes</p></header>
+<main>
+
+<div id="iosInstallHelp">
+  <b>Installer sur iPhone :</b> dans Safari, touche <b>Partager</b> puis
+  <b>Sur l’écran d’accueil</b>. L’application s’ouvrira ensuite comme une app.
+</div>
+
+<div class="tabs">
+<button class="tab active" onclick="showTab('recipes',this)">Recettes</button>
+<button class="tab" onclick="showTab('products',this)">Produits</button>
+<button class="tab" onclick="showTab('preparationsV4',this)">Préparations enregistrées</button>
+<button class="tab" onclick="showTab('recettesV4',this)">Recettes enregistrées</button>
+</div>
+
+<div class="card" style="margin-top:12px;padding:10px 12px">
+  <div class="actions">
+    <button class="secondary" type="button" onclick="exportBackupIphone()">Sauvegarder mes données</button>
+    <button class="secondary" type="button" onclick="document.getElementById('importBackupIphone').click()">Importer une sauvegarde</button>
+    <input id="importBackupIphone" type="file" accept=".json,application/json" style="display:none" onchange="importBackupIphoneFile(event)">
+  </div>
+</div>
+
+
+<section id="recipes">
+<div class="grid">
+<section class="card">
+<h2>Créer une recette</h2>
+<div class="row3">
+<div><label>Nom de la recette</label><input id="recipeName" placeholder="Ex. Pâte sucrée"></div>
+<div><label>Rendement / quantité fabriquée</label><input id="yieldQty" type="number" min="0.001" step="0.001" value="1"></div>
+<div><label>Unité du rendement</label><select id="yieldUnit"><option>kg</option><option>g</option><option>L</option><option>ml</option><option>unité</option></select></div>
+</div>
+<p class="note">Exemple : Pâte sucrée = <b>1 kg</b>. Dans une tarte, tu pourras ensuite utiliser <b>250 g</b> de cette recette.</p>
+
+<h3>Ajouter un composant</h3>
+<div class="row">
+<div>
+<label>Rechercher le produit ou la recette</label>
+<div class="searchbox">
+<input id="componentSearch" autocomplete="off" placeholder="Tape les premières lettres…">
+<div id="suggestions" class="suggestions hidden"></div>
+</div>
+</div>
+<div><label>Type</label><select id="componentType" onchange="resetComponentSearch()"><option value="product">Produit</option><option value="recipe">Recette</option></select></div>
+<div><label>Quantité</label><input id="componentQty" type="number" min="0" step="0.001" value="1"></div>
+</div>
+<div class="row3" style="margin-top:10px">
+<div><label>Unité utilisée</label><select id="componentUnit"><option>kg</option><option>g</option><option>L</option><option>ml</option><option>unité</option></select></div>
+<div><label>Composant sélectionné</label><input id="selectedComponent" readonly placeholder="Aucun"></div>
+<div><label>&nbsp;</label><button class="primary" style="width:100%" onclick="addComponent()">+ Ajouter</button></div>
+</div>
+<div class="actions"><button class="secondary" onclick="newRecipe()">Nouvelle recette</button></div>
+
+<div class="scroll" style="margin-top:14px">
+<table><thead><tr><th>Type</th><th>Composant</th><th>Qté</th><th>Coût HT</th><th>Coût TTC</th><th></th></tr></thead>
+<tbody id="recipeLines"></tbody></table>
+</div>
+<div class="summary">
+<div class="metric"><small>Coût total HT</small><div id="costHT" class="big">0,00 €</div></div>
+<div class="metric"><small>Coût total TTC</small><div id="costTTC" class="big">0,00 €</div></div>
+<div class="metric"><small>Coût HT / unité de rendement</small><div id="unitHT" class="big">0,00 €</div></div>
+<div class="metric"><small>Coût TTC / unité de rendement</small><div id="unitTTC" class="big">0,00 €</div></div>
+</div>
+<div id="recipeError" class="error"></div>
+<div class="actions"><button class="primary" onclick="saveRecipe()">💾 Enregistrer</button><button class="secondary" onclick="exportRecipe()">⬇ Exporter la fiche</button></div>
+</section>
+
+<section class="card">
+<h2>Utilisation</h2>
+<div class="metric"><b>1. Crée une pâte</b><p class="note">Rendement : <b>1 kg</b>. Ajoute les ingrédients et enregistre.</p></div>
+<div style="text-align:center;font-size:24px;margin:8px">↓</div>
+<div class="metric"><b>2. Crée une tarte</b><p class="note">Choisis <b>Recette</b>, tape « pâte » dans la recherche, puis sélectionne <b>Pâte sucrée</b> et indique <b>0,250 kg</b>.</p></div>
+<div style="text-align:center;font-size:24px;margin:8px">↓</div>
+<div class="metric"><b>3. Prix de revient automatique</b><p class="note">Le logiciel prend 25 % du coût de la pâte fabriquée à 1 kg et l'intègre dans le coût de la tarte.</p></div>
+<h3>Recherche rapide</h3><p class="note">Il suffit de taper une ou plusieurs lettres : par exemple <b>cho</b> pour retrouver les chocolats, ou <b>pur</b> pour retrouver les purées.</p>
+</section>
+</div>
+</section>
+
+<section id="products" class="hidden">
+<section class="card">
+<h2>Catalogue des produits</h2>
+<p class="note">Tu peux maintenant <b>modifier le nom, le prix, la TVA, le conditionnement</b> ou <b>supprimer</b> n'importe quel produit.</p>
+<div class="scroll">
+<table><thead><tr><th>Produit</th><th>Conditionnement</th><th>Prix HT</th><th>Prix TTC</th><th>Actions</th></tr></thead>
+<tbody id="catalog"></tbody></table>
+</div>
+<h3 id="productFormTitle">Ajouter un produit</h3>
+<div class="formbox">
+<div class="row3">
+<div><label>Nom</label><input id="newName" placeholder="Ex. Farine T55"></div>
+<div><label>Prix HT du conditionnement (€)</label><input id="newPrice" type="number" step="0.001"></div>
+<div><label>TVA</label><select id="newVat"><option value="5.5">5,5 %</option><option value="20">20 %</option></select></div>
+</div>
+<div class="row3" style="margin-top:10px">
+<div><label>Contenu du conditionnement</label><input id="newQty" type="number" step="0.001" value="1"></div>
+<div><label>Unité du contenu</label><select id="newUnit"><option>kg</option><option>L</option><option>unité</option></select></div>
+<div><label>&nbsp;</label><button class="secondary" style="width:100%" onclick="cancelProductEdit()">Annuler modification</button></div>
+</div>
+<div class="actions"><button id="saveProductBtn" class="primary" onclick="saveProduct()">+ Ajouter le produit</button></div>
+</div>
+</section>
+</section>
+
+<section id="saved" class="hidden">
+<section class="card"><h2>Recettes enregistrées</h2><div id="savedRecipes" class="empty">Aucune recette enregistrée.</div></section>
+</section>
+<section id="preparationsV4" class="hidden">
+<section class="card"><h2>Préparations enregistrées</h2><div id="prepListV4"></div></section>
+</section>
+
+<section id="recettesV4" class="hidden">
+<section class="card"><h2>Recettes enregistrées</h2><div id="recipeListV4"></div></section>
+</section>
+
+</main>
+
+
+<script>
+(function(){
+  const recoveredProducts=[{"id": "p-0-mthan7y4-0vzfd2w", "name": "Purée citron jaune 100% 1 kg", "packPrice": 14.38, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-1-mthan7y4-mpl1or6", "name": "Râpe Premium Microplane à zeste", "packPrice": 17.61, "vat": 20, "packQty": 1, "packUnit": "unité"}, {"id": "p-2-mthan7y4-jkj0s87", "name": "Rhum St James 45° 70 cl", "packPrice": 10.84, "vat": 20, "packQty": 0.7, "packUnit": "L"}, {"id": "p-3-mthan7y4-xaamjyf", "name": "Cotisation sécurité sociale", "packPrice": 1.95, "vat": 20, "packQty": 1, "packUnit": "unité"}, {"id": "p-4-mthan7y4-lmxm3qs", "name": "Maïzena 700 g", "packPrice": 3.57, "vat": 5.5, "packQty": 0.7, "packUnit": "kg"}, {"id": "p-5-mthan7y4-c1aru27", "name": "Graines de pavot 1 kg", "packPrice": 8.5, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-6-mthan7y4-62bz3b8", "name": "Noisette poudre naturelle 1 kg", "packPrice": 15.59, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-7-mthan7y4-x79kpb3", "name": "Noix de pécan 1 kg", "packPrice": 25.99, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-8-mthan7y4-03x2c71", "name": "Poudre d’amande blanchie 1 kg", "packPrice": 11.29, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-9-mthan7y4-bwbu0oa", "name": "Pistache émondée C+B 1 kg", "packPrice": 43.49, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-10-mthan7y4-4p7hzwl", "name": "Sucre poudre sachet 1 kg", "packPrice": 1.038, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-11-mthan7y5-ish4otu", "name": "Cassonade St Louis 650 g", "packPrice": 2.22, "vat": 5.5, "packQty": 0.65, "packUnit": "kg"}, {"id": "p-12-mthan7y5-5efsrd7", "name": "Sucre glace St Louis 2 kg", "packPrice": 4.57, "vat": 5.5, "packQty": 2, "packUnit": "kg"}, {"id": "p-13-mthan7y5-alvylq8", "name": "Miel fleur liquide pot 1 kg", "packPrice": 8.64, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-14-mthan7y5-x5msdl2", "name": "Paillet feuilletine 2 kg", "packPrice": 28.07, "vat": 5.5, "packQty": 2, "packUnit": "kg"}, {"id": "p-15-mthan7y5-kdf114j", "name": "MC petit feuillet jaune seau 1 kg", "packPrice": 29.31, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-16-mthan7y5-lfl07e1", "name": "Grué de cacao seau 1 kg", "packPrice": 30.15, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-17-mthan7y5-qilkqut", "name": "Gélatine bronze halal 300F", "packPrice": 44.62, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-18-mthan7y5-vmjqtbe", "name": "Acide citrique 1 kg", "packPrice": 12.83, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-19-mthan7y5-zmoqm5h", "name": "Baking powder boîte 1 kg", "packPrice": 8.07, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-20-mthan7y5-bnibyaz", "name": "Palet chocolat blanc 30% 5 kg", "packPrice": 56.99, "vat": 20, "packQty": 5, "packUnit": "kg"}, {"id": "p-21-mthan7y5-7ivxo7r", "name": "Palet chocolat lait 38% 5 kg", "packPrice": 60.39, "vat": 20, "packQty": 5, "packUnit": "kg"}, {"id": "p-22-mthan7y5-lyc8fff", "name": "Palet chocolat noir 55% 5 kg", "packPrice": 53.03, "vat": 5.5, "packQty": 5, "packUnit": "kg"}, {"id": "p-23-mthan7y5-tjjti1b", "name": "Éclats de cacahuètes 1 kg", "packPrice": 22.76, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-24-mthan7y5-wrcpgi0", "name": "Purée 100% pistache nature 1 kg", "packPrice": 34.31, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-25-mthan7y5-nr5dflk", "name": "Nappage neutre 0,9 kg", "packPrice": 4.67, "vat": 5.5, "packQty": 0.9, "packUnit": "kg"}, {"id": "p-26-mthan7y5-rjyq2e1", "name": "Sac cacao 1 kg poudre 20/22", "packPrice": 14, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-27-mthan7y5-acoz4so", "name": "Crème UHT 35% 1 L – colis 6", "packPrice": 4.213, "vat": 5.5, "packQty": 1, "packUnit": "L"}, {"id": "p-28-mthan7y5-wwpqukj", "name": "Purée de yuzu 1 kg", "packPrice": 45.68, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-29-mthan7y5-nrwctod", "name": "Mangue morceaux 1 kg", "packPrice": 4.5, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-30-mthan7y5-ltkkxi4", "name": "Purée framboise sucrée 1 kg", "packPrice": 12.19, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-31-mthan7y5-zg0uzrw", "name": "Purée passion 100% 1 kg", "packPrice": 11.21, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-32-mthan7y5-6v8o5n2", "name": "Purée fruits rouges 1 kg", "packPrice": 12.1, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-mthapje9-ec37wz9", "name": "Farine 45", "packPrice": 0.892, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-mthas8u7-1ok4bw9", "name": "Beurre", "packPrice": 7.52, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-mthaumyy-xglqp6i", "name": "Oeufs", "packPrice": 8.31, "vat": 5.5, "packQty": 30, "packUnit": "unité"}, {"id": "p-mthay5if-ysdjh6e", "name": "Sel", "packPrice": 8.25, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-mthbjmzf-f47eu42", "name": "Citron vert", "packPrice": 3.29, "vat": 5.5, "packQty": 1, "packUnit": "kg"}, {"id": "p-mthbwyle-lxxmtps", "name": "Citron jaune", "packPrice": 0.746, "vat": 5.5, "packQty": 1, "packUnit": "unité"}, {"id": "p-mthen1a5-h789ar9", "name": "Gousse de vanille", "packPrice": 0.378, "vat": 5.5, "packQty": 1, "packUnit": "unité"}, {"id": "p-mtheuphu-7qvf4v8", "name": "Huile", "packPrice": 2.66, "vat": 5.5, "packQty": 1, "packUnit": "L"}];
+  const recoveredRecipes=[{"id": "mthaz80e-jx09r5w", "name": "Pâte sucrée", "yieldQty": 1, "yieldUnit": "kg", "lines": [{"type": "product", "ref": "p-mthapje9-ec37wz9", "name": "Farine 45", "qty": 451, "unit": "g"}, {"type": "product", "ref": "p-mthas8u7-1ok4bw9", "name": "Beurre", "qty": 234, "unit": "g"}, {"type": "product", "ref": "p-12-mthan7y5-5efsrd7", "name": "Sucre glace St Louis 2 kg", "qty": 130, "unit": "g"}, {"type": "product", "ref": "p-8-mthan7y4-03x2c71", "name": "Poudre d’amande blanchie 1 kg", "qty": 91, "unit": "g"}, {"type": "product", "ref": "p-mthaumyy-xglqp6i", "name": "Oeufs", "qty": 2, "unit": "unité"}, {"type": "product", "ref": "p-mthay5if-ysdjh6e", "name": "Sel", "qty": 3, "unit": "g"}], "ht": 4.065162, "ttc": 4.288745909999999}, {"id": "mthbebsv-anzkm8o", "name": "Crémeux citron", "yieldQty": 1, "yieldUnit": "kg", "lines": [{"type": "product", "ref": "p-0-mthan7y4-0vzfd2w", "name": "Purée citron jaune 100% 1 kg", "qty": 257, "unit": "g"}, {"type": "product", "ref": "p-mthaumyy-xglqp6i", "name": "Oeufs", "qty": 7, "unit": "unité"}, {"type": "product", "ref": "p-13-mthan7y5-alvylq8", "name": "Miel fleur liquide pot 1 kg", "qty": 21, "unit": "g"}, {"type": "product", "ref": "p-17-mthan7y5-qilkqut", "name": "Gélatine bronze halal 300F", "qty": 3.4, "unit": "g"}, {"type": "product", "ref": "p-mthas8u7-1ok4bw9", "name": "Beurre", "qty": 377, "unit": "g"}], "ht": 8.802848000000001, "ttc": 9.28700464}, {"id": "mthblw6j-s6olu9r", "name": "Crème d'amande citron vert", "yieldQty": 1, "yieldUnit": "kg", "lines": [{"type": "product", "ref": "p-mthas8u7-1ok4bw9", "name": "Beurre", "qty": 250, "unit": "g"}, {"type": "product", "ref": "p-10-mthan7y4-4p7hzwl", "name": "Sucre poudre sachet 1 kg", "qty": 250, "unit": "g"}, {"type": "product", "ref": "p-mthaumyy-xglqp6i", "name": "Oeufs", "qty": 5, "unit": "unité"}, {"type": "product", "ref": "p-8-mthan7y4-03x2c71", "name": "Poudre d’amande blanchie 1 kg", "qty": 250, "unit": "g"}, {"type": "product", "ref": "p-mthbjmzf-f47eu42", "name": "Citron vert", "qty": 160, "unit": "g"}], "ht": 6.873399999999999, "ttc": 7.251437}, {"id": "mthbolih-57min46", "name": "Gel yuzu", "yieldQty": 1, "yieldUnit": "kg", "lines": [{"type": "product", "ref": "p-28-mthan7y5-wwpqukj", "name": "Purée de yuzu 1 kg", "qty": 376, "unit": "g"}, {"type": "product", "ref": "p-0-mthan7y4-0vzfd2w", "name": "Purée citron jaune 100% 1 kg", "qty": 329, "unit": "g"}, {"type": "product", "ref": "p-10-mthan7y4-4p7hzwl", "name": "Sucre poudre sachet 1 kg", "qty": 141, "unit": "g"}, {"type": "product", "ref": "p-17-mthan7y5-qilkqut", "name": "Gélatine bronze halal 300F", "qty": 14, "unit": "g"}], "ht": 22.677738, "ttc": 23.925013589999995}, {"id": "mthbyxtk-iga7onx", "name": "Ganache montée citron", "yieldQty": 1, "yieldUnit": "kg", "lines": [{"type": "product", "ref": "p-20-mthan7y5-bnibyaz", "name": "Palet chocolat blanc 30% 5 kg", "qty": 167, "unit": "g"}, {"type": "product", "ref": "p-17-mthan7y5-qilkqut", "name": "Gélatine bronze halal 300F", "qty": 3.8, "unit": "g"}, {"type": "product", "ref": "p-mthbjmzf-f47eu42", "name": "Citron vert", "qty": 80, "unit": "g"}, {"type": "product", "ref": "p-mthbwyle-lxxmtps", "name": "Citron jaune", "qty": 1, "unit": "unité"}, {"type": "product", "ref": "p-27-mthan7y5-acoz4so", "name": "Crème UHT 35% 1 L – colis 6", "qty": 0.8, "unit": "L"}], "ht": 6.452622, "ttc": 7.08351878}, {"id": "mthc6ov1-2e57f22", "name": "Tarte aux 3 citrons", "yieldQty": 8, "yieldUnit": "unité", "lines": [{"type": "recipe", "ref": "mthaz80e-jx09r5w", "name": "Pâte sucrée", "qty": 270, "unit": "g"}, {"type": "recipe", "ref": "mthblw6j-s6olu9r", "name": "Crème d'amande citron vert", "qty": 280, "unit": "g"}, {"type": "recipe", "ref": "mthbolih-57min46", "name": "Gel yuzu", "qty": 180, "unit": "g"}, {"type": "recipe", "ref": "mthbebsv-anzkm8o", "name": "Crémeux citron", "qty": 600, "unit": "g"}, {"type": "recipe", "ref": "mthbyxtk-iga7onx", "name": "Ganache montée citron", "qty": 617, "unit": "g"}], "ht": 16.367115154, "ttc": 17.43760007316}, {"id": "mtheoh3k-goyxkoo", "name": "Crémeux vanille chocolat blanc", "yieldQty": 1, "yieldUnit": "kg", "lines": [{"type": "product", "ref": "p-27-mthan7y5-acoz4so", "name": "Crème UHT 35% 1 L – colis 6", "qty": 480, "unit": "ml"}, {"type": "product", "ref": "p-10-mthan7y4-4p7hzwl", "name": "Sucre poudre sachet 1 kg", "qty": 75, "unit": "g"}, {"type": "product", "ref": "p-mthaumyy-xglqp6i", "name": "Oeufs", "qty": 6, "unit": "unité"}, {"type": "product", "ref": "p-20-mthan7y5-bnibyaz", "name": "Palet chocolat blanc 30% 5 kg", "qty": 325, "unit": "g"}, {"type": "product", "ref": "p-17-mthan7y5-qilkqut", "name": "Gélatine bronze halal 300F", "qty": 5, "unit": "g"}, {"type": "product", "ref": "p-mthen1a5-h789ar9", "name": "Gousse de vanille", "qty": 1, "unit": "unité"}], "ht": 8.06754, "ttc": 9.04838545}, {"id": "mthf0wnq-l97bs7b", "name": "Pralinée pistache", "yieldQty": 1, "yieldUnit": "kg", "lines": [{"type": "product", "ref": "p-9-mthan7y4-bwbu0oa", "name": "Pistache émondée C+B 1 kg", "qty": 560, "unit": "g"}, {"type": "product", "ref": "p-10-mthan7y4-4p7hzwl", "name": "Sucre poudre sachet 1 kg", "qty": 280, "unit": "g"}, {"type": "product", "ref": "p-mtheuphu-7qvf4v8", "name": "Huile", "qty": 0.07, "unit": "L"}, {"type": "product", "ref": "p-mthay5if-ysdjh6e", "name": "Sel", "qty": 0.005, "unit": "kg"}], "ht": 24.872490000000003, "ttc": 26.24047695}, {"id": "mthf8ntw-vrrbyua", "name": "Croustillant pistache", "yieldQty": 1, "yieldUnit": "kg", "lines": [{"type": "recipe", "ref": "mthf0wnq-l97bs7b", "name": "Pralinée pistache", "qty": 0.478, "unit": "kg"}, {"type": "product", "ref": "p-20-mthan7y5-bnibyaz", "name": "Palet chocolat blanc 30% 5 kg", "qty": 0.2, "unit": "kg"}, {"type": "product", "ref": "p-14-mthan7y5-x5msdl2", "name": "Paillet feuilletine 2 kg", "qty": 0.319, "unit": "kg"}, {"type": "product", "ref": "p-mthay5if-ysdjh6e", "name": "Sel", "qty": 0.004, "unit": "kg"}], "ht": 18.678815220000004, "ttc": 20.036692057099998}, {"id": "mthfftlv-qbz4ozt", "name": "Ganache montée vanille", "yieldQty": 1, "yieldUnit": "kg", "lines": [{"type": "product", "ref": "p-27-mthan7y5-acoz4so", "name": "Crème UHT 35% 1 L – colis 6", "qty": 0.7, "unit": "L"}, {"type": "product", "ref": "p-20-mthan7y5-bnibyaz", "name": "Palet chocolat blanc 30% 5 kg", "qty": 0.29, "unit": "kg"}, {"type": "product", "ref": "p-17-mthan7y5-qilkqut", "name": "Gélatine bronze halal 300F", "qty": 4, "unit": "g"}, {"type": "product", "ref": "p-mthen1a5-h789ar9", "name": "Gousse de vanille", "qty": 3, "unit": "unité"}], "ht": 7.567, "ttc": 8.462470899999998}];
+
+  function merge(existing,recovered){
+    const out=Array.isArray(existing)?existing.slice():[];
+    const ids=new Set(out.map(x=>x&&x.id).filter(Boolean));
+    const names=new Set(out.map(x=>String(x&&x.name||'').trim().toLowerCase()).filter(Boolean));
+    for(const x of recovered){
+      const n=String(x.name||'').trim().toLowerCase();
+      if((x.id&&ids.has(x.id))||(n&&names.has(n))) continue;
+      out.push(x);
+      if(x.id)ids.add(x.id);
+      if(n)names.add(n);
+    }
+    return out;
+  }
+
+  let p=[],r=[];
+  try{p=JSON.parse(localStorage.getItem('productsV3')||'[]')}catch(e){}
+  try{r=JSON.parse(localStorage.getItem('recipesV3')||'[]')}catch(e){}
+
+  localStorage.setItem('productsV3',JSON.stringify(merge(p,recoveredProducts)));
+  localStorage.setItem('recipesV3',JSON.stringify(merge(r,recoveredRecipes)));
+})();
+</script>
+
+<script>
+const BASE_PRODUCTS = [["Purée citron jaune 100% 1 kg", 14.38, 5.5, 1, "kg"], ["Râpe Premium Microplane à zeste", 17.61, 20, 1, "unité"], ["Rhum St James 45° 70 cl", 10.84, 20, 0.7, "L"], ["Cotisation sécurité sociale", 1.95, 20, 1, "unité"], ["Maïzena 700 g", 3.57, 5.5, 0.7, "kg"], ["Graines de pavot 1 kg", 8.5, 5.5, 1, "kg"], ["Noisette poudre naturelle 1 kg", 15.59, 5.5, 1, "kg"], ["Noix de pécan 1 kg", 25.99, 5.5, 1, "kg"], ["Poudre d’amande blanchie 1 kg", 11.29, 5.5, 1, "kg"], ["Pistache émondée C+B 1 kg", 43.49, 5.5, 1, "kg"], ["Sucre poudre sachet 1 kg", 1.038, 5.5, 1, "kg"], ["Cassonade St Louis 650 g", 2.22, 5.5, 0.65, "kg"], ["Sucre glace St Louis 2 kg", 4.57, 5.5, 2, "kg"], ["Miel fleur liquide pot 1 kg", 8.64, 5.5, 1, "kg"], ["Paillet feuilletine 2 kg", 28.07, 5.5, 2, "kg"], ["MC petit feuillet jaune seau 1 kg", 29.31, 5.5, 1, "kg"], ["Grué de cacao seau 1 kg", 30.15, 5.5, 1, "kg"], ["Gélatine bronze halal 300F", 44.62, 5.5, 1, "kg"], ["Acide citrique 1 kg", 12.83, 5.5, 1, "kg"], ["Baking powder boîte 1 kg", 8.07, 5.5, 1, "kg"], ["Palet chocolat blanc 30% 5 kg", 56.99, 20, 5, "kg"], ["Palet chocolat lait 38% 5 kg", 60.39, 20, 5, "kg"], ["Palet chocolat noir 55% 5 kg", 53.03, 5.5, 5, "kg"], ["Éclats de cacahuètes 1 kg", 22.76, 5.5, 1, "kg"], ["Purée 100% pistache nature 1 kg", 34.31, 5.5, 1, "kg"], ["Nappage neutre 0,9 kg", 4.67, 5.5, 0.9, "kg"], ["Sac cacao 1 kg poudre 20/22", 14, 5.5, 1, "kg"], ["Crème UHT 35% 1 L – colis 6", 25.28, 5.5, 6, "L"], ["Purée de yuzu 1 kg", 45.68, 5.5, 1, "kg"], ["Mangue morceaux 1 kg", 4.5, 5.5, 1, "kg"], ["Purée framboise sucrée 1 kg", 12.19, 5.5, 1, "kg"], ["Purée passion 100% 1 kg", 11.21, 5.5, 1, "kg"], ["Purée fruits rouges 1 kg", 12.1, 5.5, 1, "kg"]];
+let products = [];
+let recipes = JSON.parse(localStorage.getItem('recipesV3') || '[]');
+let lines = [];
+let editingRecipeId = null;
+let editingProductId = null;
+let selectedComponent = null;
+
+const euro=x=>new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(x);
+const uid=()=>Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);
+
+function initProducts(){
+  const saved=JSON.parse(localStorage.getItem('productsV3')||'null');
+  if(saved && Array.isArray(saved)){ products=saved; return; }
+  const oldCustom=JSON.parse(localStorage.getItem('customProductsV2')||'[]');
+  const combined=[...BASE_PRODUCTS,...oldCustom];
+  products=combined.map((p,i)=>({id:'p-'+i+'-'+uid(),name:p[0],packPrice:+p[1],vat:+p[2],packQty:+p[3],packUnit:p[4]}));
+  localStorage.setItem('productsV3',JSON.stringify(products));
+}
+
+function saveProducts(){localStorage.setItem('productsV3',JSON.stringify(products));}
+function factor(from,to){
+  if(from===to)return 1;
+  if(from==='g'&&to==='kg')return .001;
+  if(from==='kg'&&to==='g')return 1000;
+  if(from==='ml'&&to==='L')return .001;
+  if(from==='L'&&to==='ml')return 1000;
+  return null;
+}
+function productCost(p,q,u){
+  const f=factor(u,p.packUnit);
+  if(f===null)return null;
+  return q*f*(p.packPrice/p.packQty);
+}
+function recipeCost(r,q,u){
+  const f=factor(u,r.yieldUnit);
+  if(f===null)return null;
+  return {ht:r.ht*(q*f/r.yieldQty),ttc:r.ttc*(q*f/r.yieldQty)};
+}
+function showTab(id,btn){
+  ['recipes','products','saved','preparationsV4','recettesV4'].forEach(x=>{
+    const el=document.getElementById(x); if(el)el.classList.toggle('hidden',x!==id);
+  });
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  if(id==='saved')renderSaved();
+  if(id==='products')renderCatalog();
+  if(id==='preparationsV4'||id==='recettesV4')renderSavedV4();
+}
+function resetComponentSearch(){
+  selectedComponent=null;
+  document.getElementById('componentSearch').value='';
+  document.getElementById('selectedComponent').value='';
+  hideSuggestions();
+}
+function currentCandidates(){
+  const type=document.getElementById('componentType').value;
+  if(type==='product') return products.map(p=>({id:p.id,name:p.name,unit:p.packUnit,kind:'product'}));
+  return recipes.filter(r=>r.id!==editingRecipeId).map(r=>({id:r.id,name:r.name,unit:r.yieldUnit,kind:'recipe'}));
+}
+function searchComponents(){
+  const q=document.getElementById('componentSearch').value.trim().toLocaleLowerCase('fr-FR');
+  const box=document.getElementById('suggestions');
+  if(!q){box.innerHTML='';box.classList.add('hidden');return;}
+  const list=currentCandidates().filter(x=>x.name.toLocaleLowerCase('fr-FR').includes(q)).slice(0,25);
+  if(!list.length){box.innerHTML='<div class="suggestion">Aucun résultat</div>';box.classList.remove('hidden');return;}
+  box.innerHTML=list.map(x=>`<div class="suggestion" onclick="selectComponent('${x.id}')"><b>${escapeHtml(x.name)}</b><small>${x.kind==='recipe'?'Recette':'Produit'} • base : ${x.unit}</small></div>`).join('');
+  box.classList.remove('hidden');
+}
+function selectComponent(id){
+  const type=document.getElementById('componentType').value;
+  const item=type==='product'?products.find(p=>p.id===id):recipes.find(r=>r.id===id);
+  if(!item)return;
+  selectedComponent={id,kind:type};
+  document.getElementById('componentSearch').value=item.name;
+  document.getElementById('selectedComponent').value=item.name;
+  hideSuggestions();
+}
+function hideSuggestions(){document.getElementById('suggestions').classList.add('hidden')}
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+document.getElementById('componentSearch').addEventListener('input',searchComponents);
+document.getElementById('componentSearch').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    const first=document.querySelector('.suggestion[onclick]');
+    if(first)first.click();
+  }
+  if(e.key==='Escape')hideSuggestions();
+});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.searchbox'))hideSuggestions();
+});
+
+function addComponent(){
+  const q=+document.getElementById('componentQty').value;
+  const u=document.getElementById('componentUnit').value;
+  document.getElementById('recipeError').textContent='';
+  if(!selectedComponent){document.getElementById('recipeError').textContent='Choisis d’abord un produit ou une recette dans la recherche.';return}
+  if(!q||q<=0){document.getElementById('recipeError').textContent='Indique une quantité valide.';return}
+  if(selectedComponent.kind==='product'){
+    const p=products.find(x=>x.id===selectedComponent.id); if(!p)return;
+    const c=productCost(p,q,u);
+    if(c===null){document.getElementById('recipeError').textContent='Unité incompatible. Utilise kg/g, L/ml ou unité selon le produit.';return}
+    lines.push({type:'product',ref:p.id,name:p.name,qty:q,unit:u});
+  }else{
+    const r=recipes.find(x=>x.id===selectedComponent.id); if(!r)return;
+    const c=recipeCost(r,q,u);
+    if(c===null){document.getElementById('recipeError').textContent='Unité incompatible avec le rendement de la sous-recette.';return}
+    lines.push({type:'recipe',ref:r.id,name:r.name,qty:q,unit:u});
+  }
+  document.getElementById('componentQty').value=1;
+  resetComponentSearch();
+  renderLines();
+}
+function calculateLine(x){
+  if(x.type==='product'){
+    const p=products.find(p=>p.id===x.ref); if(!p)return null;
+    const ht=productCost(p,x.qty,x.unit); if(ht===null)return null;
+    return {ht,ttc:ht*(1+p.vat/100),name:p.name};
+  }
+  const r=recipes.find(r=>r.id===x.ref); if(!r)return null;
+  const c=recipeCost(r,x.qty,x.unit); return c?{...c,name:r.name}:null;
+}
+function renderLines(){
+  const tbody=document.getElementById('recipeLines');
+  tbody.innerHTML=lines.length?lines.map((x,i)=>{
+    const c=calculateLine(x);
+    const broken=!c;
+    return `<tr><td><span class="badge">${x.type==='recipe'?'Recette':'Produit'}</span></td><td>${escapeHtml(c?c.name:x.name)}${broken?' <span class="pill">référence introuvable</span>':''}</td><td>${x.qty} ${x.unit}</td><td>${c?euro(c.ht):'—'}</td><td>${c?euro(c.ttc):'—'}</td><td><button class="danger" onclick="removeLine(${i})">×</button></td></tr>`;
+  }).join(''):`<tr><td colspan="6" class="empty">Aucun composant.</td></tr>`;
+  const costs=lines.map(calculateLine).filter(Boolean);
+  const ht=costs.reduce((s,x)=>s+x.ht,0),ttc=costs.reduce((s,x)=>s+x.ttc,0);
+  const y=+document.getElementById('yieldQty').value||1;
+  document.getElementById('costHT').textContent=euro(ht);
+  document.getElementById('costTTC').textContent=euro(ttc);
+  document.getElementById('unitHT').textContent=euro(ht/y);
+  document.getElementById('unitTTC').textContent=euro(ttc/y);
+}
+function removeLine(i){lines.splice(i,1);renderLines()}
+document.getElementById('yieldQty').addEventListener('input',renderLines);
+
+function newRecipe(){
+  editingRecipeId=null;lines=[];document.getElementById('recipeName').value='';
+  document.getElementById('yieldQty').value=1;document.getElementById('yieldUnit').value='kg';
+  document.getElementById('recipeError').textContent='';resetComponentSearch();renderLines();
+}
+function saveRecipe(){
+  const name=document.getElementById('recipeName').value.trim(),y=+document.getElementById('yieldQty').value,u=document.getElementById('yieldUnit').value;
+  const err=document.getElementById('recipeError');err.textContent='';
+  if(!name||!y||!lines.length){err.textContent='Indique un nom, un rendement et au moins un composant.';return}
+  if(lines.some(x=>!calculateLine(x))){err.textContent='Un composant de cette recette n’est plus disponible ou a une unité incompatible.';return}
+  let id=editingRecipeId||uid();
+  const costs=lines.map(calculateLine);
+  const ht=costs.reduce((s,x)=>s+x.ht,0),ttc=costs.reduce((s,x)=>s+x.ttc,0);
+  const obj={id,name,yieldQty:y,yieldUnit:u,lines:JSON.parse(JSON.stringify(lines)),ht,ttc};
+  const idx=recipes.findIndex(r=>r.id===id);
+  if(idx>=0)recipes[idx]=obj;else recipes.push(obj);
+  localStorage.setItem('recipesV3',JSON.stringify(recipes));
+  editingRecipeId=id;populateAfterRecipeChange();renderSaved();
+  alert('Recette enregistrée. Les prix des produits seront automatiquement repris si tu les modifies.');
+}
+function loadRecipe(id){
+  const r=recipes.find(x=>x.id===id);if(!r)return;
+  editingRecipeId=id;document.getElementById('recipeName').value=r.name;
+  document.getElementById('yieldQty').value=r.yieldQty;document.getElementById('yieldUnit').value=r.yieldUnit;
+  lines=JSON.parse(JSON.stringify(r.lines));renderLines();showTab('recipes',document.querySelector('.tab'));window.scrollTo({top:0,behavior:'smooth'});
+}
+function deleteRecipe(id){
+  const used=recipes.some(r=>r.lines.some(x=>x.type==='recipe'&&x.ref===id));
+  if(used){alert('Cette recette est utilisée comme sous-recette dans une autre recette. Modifie d’abord la recette qui l’utilise.');return}
+  if(confirm('Supprimer cette recette ?')){recipes=recipes.filter(r=>r.id!==id);localStorage.setItem('recipesV3',JSON.stringify(recipes));if(editingRecipeId===id)newRecipe();populateAfterRecipeChange();renderSaved();}
+}
+function renderSaved(){
+  const b=document.getElementById('savedRecipes');
+  if(!recipes.length){b.className='empty';b.textContent='Aucune recette enregistrée.';return}
+  b.className='';
+  b.innerHTML=`<table><thead><tr><th>Recette</th><th>Rendement</th><th>Coût total HT</th><th>Coût / rendement</th><th>Actions</th></tr></thead><tbody>`+
+  recipes.map(r=>`<tr><td><b>${escapeHtml(r.name)}</b></td><td>${r.yieldQty} ${r.yieldUnit}</td><td>${euro(currentRecipeHT(r))}</td><td>${euro(currentRecipeHT(r)/r.yieldQty)} / ${r.yieldUnit}</td><td><button class="secondary" onclick="loadRecipe('${r.id}')">Ouvrir</button> <button class="danger" onclick="deleteRecipe('${r.id}')">Supprimer</button></td></tr>`).join('')+'</tbody></table>';
+}
+function currentRecipeHT(r){
+  return r.lines.map(calculateLine).filter(Boolean).reduce((s,x)=>s+x.ht,0);
+}
+
+function renderCatalog(){
+  document.getElementById('catalog').innerHTML=products.map(p=>{
+    const unitHT=p.packPrice/p.packQty,unitTTC=unitHT*(1+p.vat/100);
+    return `<tr><td><b>${escapeHtml(p.name)}</b></td><td>${p.packQty} ${p.packUnit}</td><td>${euro(unitHT)}</td><td>${euro(unitTTC)}</td><td><button class="secondary" onclick="editProduct('${p.id}')">Modifier</button> <button class="danger" onclick="deleteProduct('${p.id}')">Supprimer</button></td></tr>`;
+  }).join('');
+}
+function clearProductForm(){
+  editingProductId=null;
+  document.getElementById('newName').value='';document.getElementById('newPrice').value='';
+  document.getElementById('newVat').value='5.5';document.getElementById('newQty').value=1;document.getElementById('newUnit').value='kg';
+  document.getElementById('productFormTitle').textContent='Ajouter un produit';
+  document.getElementById('saveProductBtn').textContent='+ Ajouter le produit';
+}
+function editProduct(id){
+  const p=products.find(x=>x.id===id);if(!p)return;
+  editingProductId=id;document.getElementById('newName').value=p.name;document.getElementById('newPrice').value=p.packPrice;
+  document.getElementById('newVat').value=p.vat;document.getElementById('newQty').value=p.packQty;document.getElementById('newUnit').value=p.packUnit;
+  document.getElementById('productFormTitle').textContent='Modifier le produit';
+  document.getElementById('saveProductBtn').textContent='💾 Enregistrer les modifications';
+  window.scrollTo({top:document.getElementById('products').offsetTop,behavior:'smooth'});
+}
+function cancelProductEdit(){clearProductForm()}
+function saveProduct(){
+  const name=document.getElementById('newName').value.trim(),price=+document.getElementById('newPrice').value,vat=+document.getElementById('newVat').value,qty=+document.getElementById('newQty').value,unit=document.getElementById('newUnit').value;
+  if(!name||price<0||!qty){alert('Complète correctement le nom, le prix et le conditionnement.');return}
+  if(editingProductId){
+    const p=products.find(x=>x.id===editingProductId);Object.assign(p,{name,packPrice:price,vat,packQty:qty,packUnit:unit});
+  }else products.push({id:'p-'+uid(),name,packPrice:price,vat,packQty:qty,packUnit:unit});
+  saveProducts();clearProductForm();renderCatalog();populateAfterProductChange();renderLines();renderSaved();
+}
+function deleteProduct(id){
+  const p=products.find(x=>x.id===id);if(!p)return;
+  const used=recipes.some(r=>r.lines.some(x=>x.type==='product'&&x.ref===id));
+  if(used){alert('Ce produit est utilisé dans une ou plusieurs recettes. Pour éviter de casser les calculs, modifie d’abord les recettes concernées.');return}
+  if(confirm('Supprimer « '+p.name+' » du catalogue ?')){products=products.filter(x=>x.id!==id);saveProducts();renderCatalog();populateAfterProductChange();}
+}
+function populateAfterProductChange(){/* search is dynamic; nothing else required */}
+function populateAfterRecipeChange(){/* search is dynamic; nothing else required */}
+
+function exportRecipe(){
+  if(!lines.length)return alert('Aucun composant.');
+  const name=document.getElementById('recipeName').value||'recette',y=+document.getElementById('yieldQty').value||1,u=document.getElementById('yieldUnit').value;
+  const costs=lines.map(calculateLine);if(costs.some(x=>!x))return alert('Impossible d’exporter : un composant est introuvable.');
+  const ht=costs.reduce((s,x)=>s+x.ht,0),ttc=costs.reduce((s,x)=>s+x.ttc,0);
+  let txt=`FICHE DE PRIX DE REVIENT\n${name}\nRendement : ${y} ${u}\n\nCOMPOSANTS\n`;
+  lines.forEach((x,i)=>txt+=`${x.type==='recipe'?'RECETTE':'PRODUIT'};${costs[i].name};${x.qty} ${x.unit};${costs[i].ht.toFixed(2)} € HT;${costs[i].ttc.toFixed(2)} € TTC\n`);
+  txt+=`\nTOTAL HT;${ht.toFixed(2)} €\nTOTAL TTC;${ttc.toFixed(2)} €\nCOÛT / ${u};${(ht/y).toFixed(2)} € HT\n`;
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain;charset=utf-8'}));a.download=name.replace(/[^a-z0-9]/gi,'_')+'_prix_de_revient.txt';a.click();
+}
+
+initProducts();
+renderCatalog();
+renderLines();
+renderSaved();
+</script>
+
+<script>
+const V4_TYPE_KEY='recipeTypesV4';
+let recipeTypesV4={};
+try{recipeTypesV4=JSON.parse(localStorage.getItem(V4_TYPE_KEY)||'{}')}catch(e){recipeTypesV4={}}
+const DEFAULT_TYPES_V4={"mthaz80e-jx09r5w": "preparation", "mthbebsv-anzkm8o": "preparation", "mthblw6j-s6olu9r": "preparation", "mthbolih-57min46": "preparation", "mthbyxtk-iga7onx": "preparation", "mthc6ov1-2e57f22": "recette", "mtheoh3k-goyxkoo": "preparation", "mthf0wnq-l97bs7b": "preparation", "mthf8ntw-vrrbyua": "preparation", "mthfftlv-qbz4ozt": "preparation"};
+if(typeof recipes!=='undefined'){
+  recipes.forEach(r=>{
+    if(recipeTypesV4[r.id]!=='preparation' && recipeTypesV4[r.id]!=='recette'){
+      recipeTypesV4[r.id]=DEFAULT_TYPES_V4[r.id] || 'preparation';
+    }
+  });
+  localStorage.setItem(V4_TYPE_KEY,JSON.stringify(recipeTypesV4));
+}
+
+function saveRecipeTypesV4(){localStorage.setItem(V4_TYPE_KEY,JSON.stringify(recipeTypesV4));}
+function classifyRecipeV4(id,type){
+  recipeTypesV4[id]=type;
+  saveRecipeTypesV4();
+  renderSavedV4();
+}
+function renderSavedV4(){
+  if(typeof recipes==='undefined') return;
+  const groups=[
+    ['prepListV4','preparation'],
+    ['recipeListV4','recette']
+  ];
+  groups.forEach(([target,type])=>{
+    const b=document.getElementById(target); if(!b)return;
+    const arr=recipes.filter(r=>(recipeTypesV4[r.id]||'preparation')===type);
+    if(!arr.length){b.className='v4empty';b.textContent='Aucune fiche dans cette catégorie.';return}
+    b.className='v4list';
+    b.innerHTML=`<table><thead><tr><th>Fiche</th><th>Rendement</th><th>Coût total HT</th><th>Coût / rendement</th><th>Classement</th><th>Actions</th></tr></thead><tbody>`+
+      arr.map(r=>`<tr>
+        <td><b>${escapeHtml(r.name)}</b></td>
+        <td>${r.yieldQty} ${r.yieldUnit}</td>
+        <td>${euro(currentRecipeHT(r))}</td>
+        <td>${euro(currentRecipeHT(r)/r.yieldQty)} / ${r.yieldUnit}</td>
+        <td><select onchange="classifyRecipeV4('${r.id}',this.value)">
+          <option value="preparation" ${recipeTypesV4[r.id]==='preparation'?'selected':''}>Préparation</option>
+          <option value="recette" ${recipeTypesV4[r.id]==='recette'?'selected':''}>Recette</option>
+        </select></td>
+        <td><div class="actions">
+          <button class="secondary" onclick="visualiserRecipeV4('${r.id}')">Visualiser</button>
+          <button class="secondary" onclick="loadRecipe('${r.id}')">Modifier</button>
+          <button class="danger" onclick="deleteRecipe('${r.id}');renderSavedV4()">Supprimer</button>
+        </div></td>
+      </tr>`).join('')+`</tbody></table>`;
+  });
+}
+
+function visualiserRecipeV4(id){
+  const r=recipes.find(x=>x.id===id);
+  if(!r)return;
+
+  document.getElementById('v4ViewTitle').textContent=r.name;
+  document.getElementById('v4ViewMeta').innerHTML=
+    '<p><b>Rendement :</b> '+r.yieldQty+' '+escapeHtml(r.yieldUnit)+'</p>';
+
+  let totalHT=0,totalTTC=0;
+  const rows=(r.lines||[]).map(l=>{
+    const c=calculateLine(l);
+    const ht=c ? c.ht : 0;
+    const ttc=c ? c.ttc : 0;
+    totalHT+=ht;
+    totalTTC+=ttc;
+
+    return '<tr>'+
+      '<td>'+escapeHtml(c ? c.name : l.name)+'</td>'+
+      '<td>'+l.qty+' '+escapeHtml(l.unit)+'</td>'+
+      '<td>'+(c ? euro(ht) : '—')+'</td>'+
+      '<td>'+(c ? euro(ttc) : '—')+'</td>'+
+      '</tr>';
+  }).join('');
+
+  document.getElementById('v4ViewLines').innerHTML=
+    '<table><thead><tr><th>Ingrédient / préparation</th><th>Quantité</th><th>Coût HT</th><th>Coût TTC</th></tr></thead><tbody>'+
+    rows+
+    '</tbody></table>';
+
+  document.getElementById('v4ViewTotals').innerHTML=
+    'Total HT : '+euro(totalHT)+
+    ' &nbsp; • &nbsp; Total TTC : '+euro(totalTTC)+
+    ' &nbsp; • &nbsp; Coût HT / '+escapeHtml(r.yieldUnit)+' : '+euro(totalHT/r.yieldQty);
+
+  const ov=document.getElementById('v4ViewOverlay');
+  ov.classList.add('open');
+  ov.setAttribute('aria-hidden','false');
+}
+function closeVisualiserRecipeV4(){
+  const ov=document.getElementById('v4ViewOverlay');
+  ov.classList.remove('open');
+  ov.setAttribute('aria-hidden','true');
+}
+
+document.addEventListener('DOMContentLoaded',renderSavedV4);
+</script>
+
+
+<div id="v4ViewOverlay" aria-hidden="true">
+  <div id="v4ViewCard">
+    <div id="v4ViewHead">
+      <h2 id="v4ViewTitle">Fiche</h2>
+      <button id="v4ViewClose" type="button" onclick="closeVisualiserRecipeV4()">Fermer</button>
+    </div>
+    <div id="v4ViewMeta"></div>
+    <div id="v4ViewLines"></div>
+    <div id="v4ViewTotals"></div>
+  </div>
+</div>
+
+
+<script>
+(function(){
+  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  const standalone=window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
+  const help=document.getElementById('iosInstallHelp');
+  if(help && isIOS && !standalone) help.style.display='block';
+
+  if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  }
+})();
+
+function exportBackupIphone(){
+  let p=[],r=[],t={};
+  try{p=JSON.parse(localStorage.getItem('productsV3')||'[]')}catch(e){}
+  try{r=JSON.parse(localStorage.getItem('recipesV3')||'[]')}catch(e){}
+  try{t=JSON.parse(localStorage.getItem('recipeTypesV4')||'{}')}catch(e){}
+  const data={
+    format:'prix-de-revient-iphone-backup',
+    version:'V4',
+    exportDate:new Date().toISOString(),
+    products:p,
+    recipes:r,
+    recipeTypes:t
+  };
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='sauvegarde_prix_de_revient.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+
+function importBackupIphoneFile(ev){
+  const file=ev.target.files && ev.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(){
+    try{
+      const d=JSON.parse(reader.result);
+      if(!Array.isArray(d.products)||!Array.isArray(d.recipes)) throw new Error('Format invalide');
+      localStorage.setItem('productsV3',JSON.stringify(d.products));
+      localStorage.setItem('recipesV3',JSON.stringify(d.recipes));
+      if(d.recipeTypes && typeof d.recipeTypes==='object')
+        localStorage.setItem('recipeTypesV4',JSON.stringify(d.recipeTypes));
+      alert('Sauvegarde importée. La page va se recharger.');
+      location.reload();
+    }catch(e){
+      alert('Cette sauvegarde n’est pas reconnue.');
+    }
+  };
+  reader.readAsText(file);
+  ev.target.value='';
+}
+</script>
+
+</body>
+</html>
